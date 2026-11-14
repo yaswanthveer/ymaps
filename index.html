@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#f6f6f8" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1c1c1e" media="(prefers-color-scheme: dark)">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<title>North Bengaluru Corridors</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ---------- Apple-inspired tokens (light by default, dark follows system) ---------- */
+:root{
+  --font:-apple-system,BlinkMacSystemFont,"SF Pro Text","SF Pro Display","Inter","Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  --blue:#007aff; --green:#34c759; --orange:#ff9500; --purple:#af52de; --teal:#30b0c7; --yellow:#ffcc00; --red:#ff3b30; --pink:#ff2d55;
+  --label:#1d1d1f; --label2:rgba(60,60,67,.6); --label3:rgba(60,60,67,.3);
+  --material:rgba(246,246,248,.78); --material-solid:#f6f6f8; --fill:rgba(118,118,128,.12); --fill-hover:rgba(118,118,128,.18);
+  --sep:rgba(60,60,67,.14); --shadow:0 8px 32px rgba(0,0,0,.18),0 1px 3px rgba(0,0,0,.08);
+  --page:#e9e9ee;
+}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){
+  --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --purple:#bf5af2; --teal:#40c8e0; --yellow:#ffd60a; --red:#ff453a; --pink:#ff375f;
+  --label:#f5f5f7; --label2:rgba(235,235,245,.6); --label3:rgba(235,235,245,.3);
+  --material:rgba(30,30,32,.74); --material-solid:#1c1c1e; --fill:rgba(118,118,128,.24); --fill-hover:rgba(118,118,128,.32);
+  --sep:rgba(84,84,88,.55); --shadow:0 8px 32px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.3);
+  --page:#000;
+}}
+:root[data-theme="dark"]{
+  --blue:#0a84ff; --green:#30d158; --orange:#ff9f0a; --purple:#bf5af2; --teal:#40c8e0; --yellow:#ffd60a; --red:#ff453a; --pink:#ff375f;
+  --label:#f5f5f7; --label2:rgba(235,235,245,.6); --label3:rgba(235,235,245,.3);
+  --material:rgba(30,30,32,.74); --material-solid:#1c1c1e; --fill:rgba(118,118,128,.24); --fill-hover:rgba(118,118,128,.32);
+  --sep:rgba(84,84,88,.55); --shadow:0 8px 32px rgba(0,0,0,.5),0 1px 3px rgba(0,0,0,.3); --page:#000;
+}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;height:100%;background:var(--page);color:var(--label);font:15px/1.4 var(--font);
+  -webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale;letter-spacing:-.01em;overscroll-behavior:none;overflow:hidden}
+body{position:fixed;inset:0}
+#map{position:absolute;inset:0;background:#0b0c10}   /* imagery always sits on a deep base, in light or dark UI */
+.glass{background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
+
+/* ---------- Search ---------- */
+#search{position:absolute;z-index:1100;top:14px;left:14px;width:360px;border-radius:14px;box-shadow:var(--shadow);overflow:hidden;
+  background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
+.sbox{display:flex;align-items:center;height:50px;padding:0 6px 0 10px;gap:2px}
+.sbox>svg{flex:none;width:18px;height:18px;margin-left:4px;color:var(--label2)}
+#q{flex:1;min-width:0;height:36px;background:var(--fill);border:0;outline:0;color:var(--label);font:17px var(--font);letter-spacing:-.02em;
+  padding:0 10px 0 32px;margin-left:-26px;border-radius:10px}
+#q::placeholder{color:var(--label2)}
+#q::-webkit-search-cancel-button{display:none}
+.ibtn{flex:none;width:36px;height:36px;border:0;border-radius:50%;background:none;color:var(--label2);cursor:pointer;display:grid;place-items:center;font-size:20px;font-family:var(--font)}
+.ibtn:active{background:var(--fill)}
+#clr{width:22px;height:22px;font-size:14px;line-height:1;background:var(--label3);color:var(--material-solid);margin:0 4px 0 -32px;position:relative}
+#loc{color:var(--blue)}#loc.busy svg{animation:spin 1s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#res{list-style:none;margin:0;padding:0 0 6px;border-top:.5px solid var(--sep);max-height:min(60vh,440px);overflow-y:auto;-webkit-overflow-scrolling:touch}
+#res li{display:flex;gap:12px;align-items:center;padding:9px 14px;cursor:pointer;position:relative}
+#res li[data-i]+li[data-i]::before{content:"";position:absolute;top:0;left:56px;right:0;border-top:.5px solid var(--sep)}
+#res li.on,#res li:hover{background:var(--fill)}
+#res li .ic{flex:none;width:30px;height:30px;border-radius:50%;display:grid;place-items:center;background:var(--fill);font-size:13px}
+#res li b{display:block;font-weight:600;font-size:15px;color:var(--label);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#res li small{display:block;color:var(--label2);font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#res li>div{min-width:0}
+#res .hd{font-size:13px;font-weight:600;color:var(--label2);padding:12px 14px 4px;cursor:default;letter-spacing:-.01em}
+#res .hd:hover,#res .msg:hover{background:none}
+#res .msg{color:var(--label2);font-size:14px;cursor:default;padding:12px 14px}
+
+/* destination + my-location markers (Apple Maps style) */
+.dpin{position:relative;width:34px;height:46px;transform:translate(-50%,-100%)}
+.dpin .h{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;background:var(--red);border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);display:grid;place-items:center}
+.dpin .h::after{content:"";width:10px;height:10px;border-radius:50%;background:#fff}
+.dpin::after{content:"";position:absolute;left:50%;top:33px;width:3px;height:12px;margin-left:-1.5px;background:#fff;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.me{width:20px;height:20px;transform:translate(-50%,-50%);border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 0 0 7px rgba(0,122,255,.22),0 2px 6px rgba(0,0,0,.3)}
+.acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
+.acts a,.acts button{flex:1;border:0;cursor:pointer;font-family:var(--font);text-align:center;text-decoration:none;font-weight:600;font-size:15px;padding:10px 12px;border-radius:12px;white-space:nowrap}
+.acts .pri{background:var(--blue);color:#fff!important}
+.acts .sec2{background:var(--fill);color:var(--blue)!important}
+
+/* ---------- Side panel ---------- */
+#panel{position:absolute;z-index:850;top:76px;left:14px;bottom:14px;width:360px;border-radius:14px;box-shadow:var(--shadow);
+  background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);
+  display:flex;flex-direction:column;overflow:hidden;transition:transform .45s cubic-bezier(.32,.72,0,1)}
+#panel.hidden{transform:translateX(calc(-100% - 20px))}
+#panel header{padding:16px 18px 12px;border-bottom:.5px solid var(--sep)}
+#panel header h2{margin:0;font-size:22px;font-weight:700;letter-spacing:-.025em;color:var(--label)}
+#panel header div{color:var(--label2);font-size:13px;margin-top:2px}
+#panel .body{overflow-y:auto;padding:4px 12px 16px}
+.sec{font-size:13px;font-weight:600;color:var(--label2);margin:18px 6px 6px}
+#zones{background:var(--fill);border-radius:12px;overflow:hidden}
+.zone{display:flex;gap:12px;align-items:flex-start;padding:11px 12px;cursor:pointer;position:relative;transition:background .15s}
+.zone+.zone::before{content:"";position:absolute;top:0;left:50px;right:0;border-top:.5px solid var(--sep)}
+.zone:hover,.zone.active{background:var(--fill-hover)}
+.num{flex:none;width:26px;height:26px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:13px;color:#fff;margin-top:1px}
+.num span{color:#16161a!important}
+.zone b{display:block;font-size:15px;font-weight:600}
+.zone small{display:block;color:var(--label2);font-size:13px}
+.tag{display:inline-block;font-size:11px;font-weight:600;padding:2px 8px;border-radius:6px;margin-top:5px;letter-spacing:0}
+.t-fit{background:rgba(61,214,140,.18);color:#13804c}
+.t-part{background:rgba(57,197,212,.18);color:#0f7884}
+.t-no{background:var(--fill);color:var(--label2)}
+.t-fut{background:rgba(179,140,255,.2);color:#6d44c9}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .t-fit{color:#5EE3A2}:root:not([data-theme="light"]) .t-part{color:#5FD6E3}
+  :root:not([data-theme="light"]) .t-fut{color:#C9AEFF}}
+:root[data-theme="dark"] .t-fit{color:#5EE3A2}:root[data-theme="dark"] .t-part{color:#5FD6E3}:root[data-theme="dark"] .t-fut{color:#C9AEFF}
+.lg{display:flex;align-items:center;gap:12px;font-size:14px;color:var(--label);padding:7px 12px}
+.ln{width:28px;height:5px;border-radius:3px;flex:none}
+#legend{background:var(--fill);border-radius:12px;padding:4px 0}
+#coord{margin:16px 0 0;padding:12px;border-radius:12px;background:var(--fill);font-size:13px;color:var(--label2)}
+#coord a{color:var(--blue);text-decoration:none;font-weight:600}
+#toggle{position:absolute;z-index:860;top:76px;left:382px;width:36px;height:36px;border-radius:50%;border:0;box-shadow:var(--shadow);
+  background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);
+  color:var(--label);cursor:pointer;font-size:15px;transition:left .45s cubic-bezier(.32,.72,0,1)}
+#toggle.shut{left:14px}
+
+/* ---------- Leaflet skin ---------- */
+.leaflet-container{font-family:var(--font)}
+.leaflet-control-layers,.leaflet-bar{border:0!important;border-radius:12px!important;box-shadow:var(--shadow)!important;overflow:hidden;
+  background:var(--material)!important;-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
+.leaflet-bar a{background:transparent!important;color:var(--label)!important;border-bottom:.5px solid var(--sep)!important;width:40px!important;height:40px!important;line-height:40px!important;font-weight:400}
+.leaflet-bar a:last-child{border-bottom:0!important}
+.leaflet-control-layers{color:var(--label)!important;font-size:14px;padding:4px 2px}
+.leaflet-control-layers-toggle{width:40px!important;height:40px!important;background-size:20px!important}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]) .leaflet-control-layers-toggle{filter:invert(1)}}
+.leaflet-control-layers label{padding:3px 6px}
+.leaflet-control-layers input{accent-color:var(--blue)}
+.leaflet-control-layers-separator{border-top:.5px solid var(--sep)!important}
+.leaflet-top.leaflet-right{top:4px}
+.leaflet-control-scale-line{background:var(--material)!important;border-color:var(--label2)!important;color:var(--label)!important;font-size:11px}
+.leaflet-control-attribution{background:rgba(255,255,255,.55)!important;color:#333!important;font-size:10px;border-radius:6px 0 0 0}
+.leaflet-control-attribution a{color:#333!important}
+.leaflet-popup-content-wrapper{border-radius:16px;color:var(--label);box-shadow:var(--shadow);
+  background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px)}
+.leaflet-popup-tip{background:var(--material-solid);box-shadow:none}
+.leaflet-popup-content{margin:16px 18px;font:14px/1.45 var(--font);min-width:260px}
+.leaflet-container a.leaflet-popup-close-button{top:10px;right:10px;width:26px;height:26px;border-radius:50%;background:var(--fill);color:var(--label2);font:18px/26px var(--font);text-align:center}
+.leaflet-tooltip{font-family:var(--font);font-size:13px;font-weight:500;border:0;border-radius:8px;color:var(--label);background:var(--material-solid);box-shadow:var(--shadow)}
+.pop h3{margin:0 30px 2px 0;font-weight:700;font-size:20px;letter-spacing:-.025em;color:var(--label)!important}
+.pop .row{display:grid;grid-template-columns:76px 1fr;gap:8px;padding:7px 0;border-top:.5px solid var(--sep);font-size:14px}
+.pop .row span:first-child{color:var(--label2)}
+
+/* Label chips — Apple Maps-style capsules */
+.chip{display:inline-flex;align-items:center;gap:7px;white-space:nowrap;transform:translate(-50%,-50%);padding:5px 12px 5px 9px;border-radius:999px;
+  font-family:var(--font);font-size:14px;font-weight:600;letter-spacing:-.01em;line-height:1.15;text-align:left;color:#fff;
+  background:rgba(28,28,30,.72);-webkit-backdrop-filter:blur(12px);backdrop-filter:blur(12px);box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.chip::before{content:"";flex:none;width:10px;height:10px;border-radius:50%;background:currentColor;box-shadow:0 0 0 2px rgba(255,255,255,.9)}
+.chip .tx,.chip .tx>span{color:#fff}
+[hidden]{display:none!important}
+.chip small{display:block;font-weight:500;font-size:11px;color:rgba(235,235,245,.7)}
+.chip .tx{display:flex;flex-direction:column}
+.chip.sm{font-size:12.5px;padding:4px 10px 4px 8px}
+.chip.road{padding:3px 9px;font-size:12px;font-weight:700;color:#fff!important;border-radius:6px;box-shadow:0 1px 4px rgba(0,0,0,.4);-webkit-backdrop-filter:none;backdrop-filter:none}
+.chip.road::before{display:none}
+.chip-wrap{background:none;border:none}
+
+/* Numbered pin (Golden Triangle) */
+.npin{position:relative;width:30px;height:30px;transform:translate(-50%,-50%)}
+.npin .h{position:absolute;inset:0;border-radius:50%;background:currentColor;border:2.5px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.4)}
+.npin .n{position:absolute;inset:0;display:grid;place-items:center;font-weight:700;font-size:14px;color:#16161a;font-family:var(--font)}
+.ipin{position:relative;width:38px;height:38px;transform:translate(-50%,-50%);border-radius:50%;display:grid;place-items:center;
+  background:#1c1c1e;border:2.5px solid #fff;box-shadow:0 2px 10px rgba(0,0,0,.4);font-size:17px}
+
+/* Sweet-spot target */
+.target{position:relative;width:0;height:0}
+.target i{position:absolute;left:50%;top:50%;border-radius:50%;border:1.5px solid rgba(245,184,61,.9);transform:translate(-50%,-50%);background:rgba(245,184,61,.05)}
+.target i:nth-child(1){width:110px;height:110px;opacity:.9}
+.target i:nth-child(2){width:180px;height:180px;opacity:.5}
+.target i:nth-child(3){width:250px;height:250px;opacity:.25}
+.target i.p{width:300px;height:300px;animation:pulse 3s cubic-bezier(.2,.6,.3,1) infinite;will-change:transform,opacity;background:none}
+.target i.p2{animation-delay:1.5s}
+@keyframes pulse{0%{transform:translate(-50%,-50%) scale(.3);opacity:.8}100%{transform:translate(-50%,-50%) scale(1);opacity:0}}
+.target .core{position:absolute;left:50%;top:50%;transform:translate(-50%,-50%);width:88px;height:88px;border-radius:50%;
+  background:linear-gradient(180deg,#FFCE6B,#F2A922);border:3px solid #fff;box-shadow:0 6px 20px rgba(0,0,0,.35);
+  display:grid;place-items:center;text-align:center;color:#2b1a00;font-family:var(--font);font-weight:700;font-size:21px;letter-spacing:-.03em;line-height:1}
+.target .core small{display:block;font-weight:600;font-size:8.5px;letter-spacing:.02em;margin-top:3px;opacity:.95}
+
+.callout{transform:translate(-50%,-50%);text-align:center;white-space:nowrap;font-family:var(--font);font-weight:700;font-size:18px;letter-spacing:-.02em;line-height:1.15;
+  color:#fff;text-shadow:0 1px 3px rgba(0,0,0,.85),0 0 12px rgba(0,0,0,.5)}
+.callout em{display:block;font-style:normal;font-weight:600;font-size:12px;letter-spacing:0;color:#F5B83D;margin-top:2px}
+
+/* Zoom-level label visibility */
+.z-low .chip.sm,.z-low .chip.road,.z-low .callout{display:none}
+.z-mid .chip small{display:none}
+.z-mid .chip{font-size:13px;padding:3px 10px 3px 8px}
+
+/* ---------- Quick chips (Google-Maps style) ---------- */
+#chips{position:absolute;z-index:1090;top:20px;left:390px;right:270px;display:flex;gap:8px;overflow-x:auto;scrollbar-width:none;padding:2px 2px 8px}
+#chips::-webkit-scrollbar{display:none}
+#chips button{flex:none;display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border:0;border-radius:18px;cursor:pointer;
+  font:600 14px var(--font);letter-spacing:-.01em;color:var(--label);box-shadow:0 2px 8px rgba(0,0,0,.18);
+  background:var(--material);-webkit-backdrop-filter:saturate(180%) blur(24px);backdrop-filter:saturate(180%) blur(24px);transition:background .15s,color .15s}
+#chips button i{font-style:normal;width:10px;height:10px;border-radius:50%;flex:none}
+#chips button.off{color:var(--label2)}
+#chips button.off i{opacity:.35}
+#chips button:active{transform:scale(.97)}
+#fabLoc{display:none}
+.grab{display:none}
+#detail{display:none}
+
+/* ---------- Phone layout: Google-Maps-style bottom sheet ---------- */
+@media (max-width:760px){
+  :root{--top-ui:calc(112px + env(safe-area-inset-top))}
+  #search{top:calc(8px + env(safe-area-inset-top));left:10px;right:10px;width:auto;border-radius:25px}
+  #search.open{border-radius:20px}
+  .sbox{height:50px;padding:0 6px 0 8px}
+  #q{background:none;margin-left:-26px;padding-left:34px}
+  #loc{display:none}
+  #res{max-height:calc(100dvh - 140px)}
+  #chips{top:calc(66px + env(safe-area-inset-top));left:0;right:0;padding:2px 10px 8px}
+
+  #toggle{display:none}
+  #panel{position:fixed;z-index:1050;top:auto;left:0;right:0;bottom:0;width:auto;height:calc(100dvh - var(--top-ui) - 8px);
+    border-radius:16px 16px 0 0;transform:translateY(100%);transition:transform .38s cubic-bezier(.32,.72,0,1);will-change:transform;
+    box-shadow:0 -4px 24px rgba(0,0,0,.22);background:var(--material-solid);-webkit-backdrop-filter:none;backdrop-filter:none}
+  #panel.hidden{transform:translateY(100%)}
+  .grab{display:block;flex:none;height:22px;touch-action:none;cursor:grab;position:relative}
+  .grab::before{content:"";position:absolute;top:8px;left:50%;width:38px;height:5px;margin-left:-19px;border-radius:3px;background:var(--label3)}
+  #panel::before{display:none}
+  #panel header{padding:2px 18px 12px;touch-action:none;border-bottom:0}
+  #panel header h2{font-size:22px}
+  #panel .body{padding:0 14px calc(20px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+  #panel.detail header,#panel.detail .body{display:none}
+  #panel.detail #detail{display:flex}
+  #detail{flex-direction:column;min-height:0;flex:1;position:relative}
+  #dclose{position:absolute;top:-8px;right:14px;width:30px;height:30px;border:0;border-radius:50%;background:var(--fill);color:var(--label2);font:20px/30px var(--font);cursor:pointer;z-index:2}
+  #dbody{overflow-y:auto;padding:0 18px calc(20px + env(safe-area-inset-bottom));overscroll-behavior:contain}
+  #dbody .pop h3{font-size:22px;margin-right:44px}
+  #dbody [data-drag]{touch-action:none;cursor:grab}
+  #dbody .pop .row{font-size:15px}
+  #dbody .acts{position:sticky;bottom:0}
+
+  #fabLoc{display:grid;place-items:center;position:fixed;z-index:1040;right:12px;bottom:calc(var(--sheet-h,120px) + 14px);width:50px;height:50px;border:0;border-radius:50%;
+    background:var(--material-solid);color:var(--blue);box-shadow:0 3px 12px rgba(0,0,0,.3);cursor:pointer;transition:bottom .38s cubic-bezier(.32,.72,0,1)}
+  #fabLoc.busy svg{animation:spin 1s linear infinite}
+  #fabLoc svg{width:24px;height:24px}
+
+  .leaflet-top.leaflet-right{top:var(--top-ui)}
+  .leaflet-top .leaflet-control{margin-top:4px;margin-right:12px}
+  .leaflet-control-layers-toggle{width:44px!important;height:44px!important}
+  .leaflet-control-zoom{display:none}
+  .leaflet-bottom{bottom:var(--sheet-h,120px);transition:bottom .38s cubic-bezier(.32,.72,0,1)}
+  .leaflet-bottom.leaflet-left .leaflet-control{margin-left:12px;margin-bottom:8px}
+  .leaflet-control-attribution{font-size:9px}
+  .leaflet-popup-content{min-width:0;max-width:calc(100vw - 80px)}
+
+  /* map markings sized for a phone */
+  .chip{font-size:12.5px;padding:4px 10px 4px 8px;gap:6px}
+  .chip::before{width:8px;height:8px}
+  .chip small{display:none}
+  .chip.road{font-size:10.5px;padding:2px 7px}
+  .target{transform:scale(.55)}
+  .callout{font-size:15px!important}
+  .callout em{font-size:10px}
+  .npin{width:24px;height:24px}.npin .n{font-size:12px}
+  .ipin{width:32px;height:32px;font-size:14px}
+  .z-mid .chip.sm,.z-mid .chip.road,.z-mid .callout,.z-mid .npin{display:none}
+}
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div id="search">
+  <div class="sbox">
+    <svg viewBox="0 0 24 24" fill="none" stroke="#8e98ad" stroke-width="2.2" stroke-linecap="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+    <input id="q" type="search" placeholder="Search a place, village or lat, lng" autocomplete="off" autocorrect="off" spellcheck="false"
+      enterkeyhint="search" role="combobox" aria-expanded="false" aria-controls="res" aria-label="Search places">
+    <button class="ibtn" id="clr" title="Clear" aria-label="Clear search" hidden>×</button>
+    <button class="ibtn" id="loc" title="Show my location" aria-label="Show my location">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>
+    </button>
+  </div>
+  <ul id="res" role="listbox" hidden></ul>
+</div>
+
+<nav id="chips" aria-label="Quick filters">
+  <button data-act="sweet"><i style="background:#F5B83D"></i>Sweet spot</button>
+  <button data-act="rings"><i style="background:#3DD68C"></i>Buy-bands</button>
+  <button data-act="roads"><i style="background:#F27D62"></i>Highways</button>
+  <button data-act="zones"><i style="background:#8C93F2"></i>Zones</button>
+  <button data-act="airport">✈ Airport</button>
+</nav>
+
+<button id="fabLoc" aria-label="Show my location">
+  <svg viewBox="0 0 24 24" fill="currentColor"><path d="M21 3L3 10.5l7.5 2.9L13.4 21z"/></svg>
+</button>
+
+<button id="toggle" title="Show/hide panel" aria-label="Show or hide the guide">‹</button>
+<aside id="panel">
+  <div class="grab" data-drag aria-hidden="true"></div>
+  <header data-drag>
+    <h2>Corridor Guide</h2>
+    <div>₹10–20 L/gunta ≈ ₹918–1,836 / sq ft · Tap any zone to fly there</div>
+  </header>
+  <div class="body">
+    <div class="sec">Growth zones</div>
+    <div id="zones"></div>
+
+    <div class="sec">Connectivity</div>
+    <div id="legend">
+    <div class="lg"><span class="ln" style="background:#F5B83D"></span>STRR / NH-648</div>
+    <div class="lg"><span class="ln" style="background:#F27D62"></span>NH-44 Bengaluru–Hyderabad</div>
+    <div class="lg"><span class="ln" style="background:#39C5D4"></span>NH-48 Nelamangala–Tumakuru</div>
+    <div class="lg"><span class="ln" style="background:repeating-linear-gradient(90deg,#B38CFF 0 8px,transparent 8px 12px)"></span>Bengaluru–Pune Greenfield Expwy (proposed)</div>
+    <div class="lg"><span class="ln" style="background:repeating-linear-gradient(90deg,#3DD68C 0 4px,transparent 4px 7px);opacity:.8"></span>1.5–3.5 km buy-band around STRR interchanges</div>
+    </div>
+
+    <div id="coord">Click anywhere on the map for coordinates and distance to the airport.</div>
+    <div class="sec" style="font-weight:400;font-size:12px;line-height:1.4">Boundaries &amp; alignments are indicative (not survey/master-plan accurate). Verify with satellite view before any decision.</div>
+  </div>
+  <section id="detail" aria-live="polite">
+    <button id="dclose" aria-label="Close">×</button>
+    <div id="dbody"></div>
+  </section>
+</aside>
+
+<script>
+const isMobile = () => window.innerWidth < 760;
+// On phones, place details open in the bottom sheet instead of a popup, so popups must not pan the map.
+const _adjustPan = L.Popup.prototype._adjustPan;
+L.Popup.prototype._adjustPan = function () { if (!isMobile()) return _adjustPan.apply(this, arguments); };
+const map = L.map('map', {preferCanvas:true, renderer:L.canvas({padding:0.5, tolerance:4}), zoomControl:false, minZoom:9, maxZoom:18, zoomSnap:0.25, zoomDelta:0.5}).setView([13.2, 77.5], 11);
+L.control.zoom({position:'bottomright'}).addTo(map);
+L.control.scale({imperial:false, position:isMobile() ? 'bottomleft' : 'bottomright'}).addTo(map);
+
+// ---------- Base maps ----------
+const esri = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, opacity:.72, keepBuffer:4, attribution:'Imagery © Esri'});
+const esriLabels = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {maxZoom:19, opacity:.7});
+const satellite = L.layerGroup([esri]);
+const satLabels = L.layerGroup([L.tileLayer(esri._url,{maxZoom:19, opacity:.72, keepBuffer:4, attribution:'Imagery © Esri'}), esriLabels]);
+const dark = L.tileLayer('https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png', {maxZoom:19, attribution:'© OSM © CARTO'});
+const streets = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {maxZoom:19, attribution:'© OpenStreetMap'});
+satellite.addTo(map);
+
+
+const AIRPORT = [13.1986, 77.7066];
+// Palette — one job per colour, tuned to equal visual weight on satellite imagery.
+//   amber  = the opportunity (sweet spot + the STRR that creates it) — the only "loud" colour
+//   mint   = act here (buy-bands, in-budget)
+//   aqua   = partial fit (Nelamangala/Dobbaspet + NH-48 that serves it)
+//   violet = future / proposed
+//   indigo, azure, steel, mist = above budget — cool and recessive
+//   coral  = NH-44     blue = interactive UI only (directions, my location), never data
+const C = {amber:'#F5B83D', mint:'#3DD68C', aqua:'#39C5D4', violet:'#B38CFF', coral:'#F27D62',
+           indigo:'#8C93F2', azure:'#5AA9F5', steel:'#9AA9C2', mist:'#C9CDD6', blue:'#0A84FF'};
+
+// ---------- Zones ----------
+const zones = [
+  { id:'bag', n:1, name:'Bagalur', sub:'Employment-led', col:'indigo', tag:['t-no','ABOVE BUDGET'],
+    price:'Well above ₹1,836 / sq ft', gunta:'> ₹20 L / gunta',
+    about:'Golden Triangle vertex — employment-led growth.', play:'Demand source, not an acquisition target at this budget.',
+    poly:[[13.163,77.628],[13.172,77.66],[13.163,77.695],[13.14,77.712],[13.112,77.703],[13.098,77.672],[13.106,77.636],[13.13,77.618]] },
+  { id:'she', n:2, name:'Shettigere', sub:'Airport-led', col:'azure', tag:['t-no','ABOVE BUDGET'],
+    price:'Well above ₹1,836 / sq ft', gunta:'> ₹20 L / gunta',
+    about:'Golden Triangle vertex — airport-led growth.', play:'Demand source, not an acquisition target at this budget.',
+    poly:[[13.238,77.618],[13.243,77.65],[13.232,77.682],[13.205,77.69],[13.183,77.672],[13.178,77.64],[13.195,77.612]] },
+  { id:'kiadb', n:3, name:'KIADB Phase 2', sub:'Foxconn & Boeing · Employment hub', col:'steel', tag:['t-no','ABOVE BUDGET'],
+    price:'Well above ₹1,836 / sq ft', gunta:'> ₹20 L / gunta',
+    about:'Industrial → mixed-use. Foxconn (~300 ac) + Boeing engineering campus (43 ac).', play:'Primary job anchor — spillover feeds Doddaballapura.',
+    poly:[[13.295,77.69],[13.298,77.735],[13.288,77.778],[13.255,77.785],[13.225,77.765],[13.212,77.728],[13.228,77.695],[13.262,77.682]] },
+  { id:'dbp', n:4, name:'Doddaballapura', sub:'STRR Arc · The Sweet Spot', col:'amber', tag:['t-fit','SWEET SPOT · IN BUDGET'],
+    price:'₹1,499 – 1,700 / sq ft', gunta:'≈ ₹16.3 – 18.5 L / gunta',
+    about:'The hinge between KIADB/Aerospace jobs and KWIN City via STRR & NH-648.', play:'Acquire 1.5–3.5 km off STRR interchanges — fast access, no NHAI setback, no frontage premium.',
+    poly:[[13.338,77.475],[13.35,77.52],[13.345,77.565],[13.322,77.612],[13.282,77.628],[13.245,77.6],[13.232,77.548],[13.245,77.5],[13.285,77.468]] },
+  { id:'kwin', n:5, name:'KWIN City', sub:'Nelamangala – Dobbaspet', col:'violet', tag:['t-fut','FUTURE MASTER-PLAN'],
+    price:'Speculative — surroundings rising', gunta:'—',
+    about:'Knowledge, Wellbeing & Innovation City across Doddaballapura & Nelamangala taluks.', play:"Don't buy inside — buy on the corridors (STRR, NH-648) feeding it.",
+    poly:[[13.278,77.33],[13.292,77.37],[13.29,77.42],[13.268,77.465],[13.228,77.472],[13.195,77.44],[13.188,77.39],[13.205,77.348],[13.24,77.318]] },
+  { id:'nel', n:6, name:'Nelamangala & Dobbaspet', sub:'Western growth corridor', col:'aqua', tag:['t-part','RURAL POCKETS FIT'],
+    price:'Town RERA ₹3,000 – 5,750 · rural < ₹1,800', gunta:'Rural: < ₹19.6 L / gunta',
+    about:'Western KWIN footprint along NH-48 & STRR — deep-tech, education, automotive.', play:'Agri land → DC conversion → layout. 3–5 yr horizon timed to KWIN maturity.',
+    poly:[[13.292,77.185],[13.3,77.24],[13.27,77.3],[13.21,77.335],[13.15,77.395],[13.08,77.43],[13.055,77.39],[13.08,77.345],[13.15,77.285],[13.215,77.2]] },
+  { id:'raj', n:7, name:'Rajanukunte', sub:'Mature · Yelahanka-adjacent', col:'mist', tag:['t-no','NOT A FIT'],
+    price:'₹3,500 – 5,500+ / sq ft', gunta:'₹38 – 60 L / gunta',
+    about:'Excellent residential market, but already priced well above budget.', play:'Only compromised / interior / title-risky land fits — avoid.',
+    poly:[[13.2,77.532],[13.208,77.565],[13.198,77.595],[13.17,77.603],[13.145,77.585],[13.142,77.548],[13.162,77.528]] },
+];
+
+const localIdx = [];   // places drawn on this map, searchable first
+const zoneLayer = L.layerGroup().addTo(map);
+// fills thin out as you zoom in so the land underneath stays readable
+const fillK = () => { const z = map.getZoom(); return z >= 13 ? .35 : z >= 12 ? .6 : 1; };
+const chipLayer = L.layerGroup().addTo(map);
+const refs = {}, zoneEls = {};
+const centroid = poly => [poly.reduce((a, p) => a + p[0], 0) / poly.length, poly.reduce((a, p) => a + p[1], 0) / poly.length];
+const pop = z => `<div class="pop"><h3>${z.name}</h3>
+  <div style="color:var(--label2);font-size:13px;margin-bottom:6px">${z.sub}</div>
+  <span class="tag ${z.tag[0]}">${z.tag[1]}</span>
+  <div class="row" style="margin-top:8px"><span>About</span><span>${z.about}</span></div>
+  <div class="row"><span>Price</span><span>${z.price}</span></div>
+  <div class="row"><span>Per gunta</span><span><b>${z.gunta}</b></span></div>
+  <div class="row"><span>Play</span><span>${z.play}</span></div>
+  <div class="acts"><a class="pri" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${centroid(z.poly).map(v => v.toFixed(5)).join(',')}">Directions</a></div></div>`;
+
+zones.forEach(z => {
+  const base = {dbp:.34, nel:.24, kwin:.22, raj:.08}[z.id] ?? .16;   // opportunity reads first, above-budget recedes
+  const p = L.polygon(z.poly, {color:C[z.col], weight:z.id==='dbp'?2.5:1.75, opacity:z.id==='dbp'?1:.85, fillColor:C[z.col], fillOpacity:base,
+      dashArray: z.id==='raj' ? '5 5' : null, smoothFactor:1}).bindPopup(pop(z), {maxWidth:320, autoPanPaddingTopLeft:window.innerWidth<760?L.point(16,130):L.point(400,80), autoPanPaddingBottomRight:L.point(window.innerWidth<760?16:60,30)});
+  p._base = base;
+  p.on('mouseover', () => p.setStyle({fillOpacity:fillK()*base+.18}));
+  p.on('mouseout', () => p.setStyle({fillOpacity:fillK()*base}));
+  p.addTo(zoneLayer); refs[z.id] = p;
+
+  // label chip
+  const ctr = p.getBounds().getCenter();
+  const shift = {kiadb:[-0.012,0.022], she:[-0.004,-0.022], dbp:[0.02,-0.01], nel:[-0.055,0.035], kwin:[0.005,-0.005], raj:[-0.01,0]}[z.id] || [0,0];
+  if (z.id !== 'dbp') {
+    L.marker([ctr.lat+shift[0], ctr.lng+shift[1]], {interactive:true, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+      html:`<div class="chip ${z.id==='raj'||z.id==='nel'?'sm':''}" style="color:${C[z.col]}"><div class="tx"><span>${z.name}</span><small>${z.sub}</small></div></div>`})})
+      .on('click', () => p.openPopup()).addTo(chipLayer);
+  }
+  // numbered pin for the Golden-Triangle trio
+  if (z.n <= 3) {
+    const top = p.getBounds().getNorth();
+    L.marker([top+0.004, ctr.lng+({she:-0.03, bag:-0.045}[z.id]||0)], {icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+      html:`<div class="npin" style="color:${C[z.col]}"><div class="h"></div><div class="n">${z.n}</div></div>`})}).addTo(chipLayer);
+  }
+
+  const el = document.createElement('div');
+  el.className = 'zone';
+  el.innerHTML = `<div class="num" style="background:${z.col==='mist'?'#8e8e93':C[z.col]}"><span>${z.n}</span></div>
+    <div><b>${z.name}</b><small>${z.sub} · ${z.price}</small><span class="tag ${z.tag[0]}">${z.tag[1]}</span></div>`;
+  el.onclick = () => {
+    document.querySelectorAll('.zone').forEach(x => x.classList.remove('active')); el.classList.add('active');
+    map.flyToBounds(p.getBounds(), isMobile() ? {...mobilePad(sheetDetailH()), duration:1, maxZoom:12.5} : {paddingTopLeft:[400,90], paddingBottomRight:[240,40], duration:1, maxZoom:12.5});
+    map.once('moveend', () => p.openPopup());
+  };
+  document.getElementById('zones').appendChild(el); zoneEls[z.id] = el;
+  localIdx.push({name:z.name, sub:z.sub, ic:'◆', col:C[z.col], go:() => el.onclick()});
+});
+
+// Golden Triangle linking line
+const golden = L.polygon([[13.135,77.665],[13.21,77.65],[13.255,77.735]], {color:'#fff', weight:1.5, opacity:.7, dashArray:'2 6', fill:false, interactive:false}).addTo(map);
+
+// ---------- Roads (indicative alignments, Apple-Maps style: white casing + colour) ----------
+const roads = L.layerGroup().addTo(map);
+function neon(pts, col, label, opts={}) {
+  const w = (opts.w||9) * .55;
+  L.polyline(pts, {color:'#000', weight:w+5, opacity:.18, interactive:false, lineCap:'round', lineJoin:'round'}).addTo(roads);
+  L.polyline(pts, {color:'#fff', weight:w+3, opacity:opts.slow?.55:.95, interactive:false, lineCap:'round', lineJoin:'round'}).addTo(roads);
+  L.polyline(pts, {color:C[col], weight:w, opacity:1, dashArray:opts.slow?'10 8':null, lineCap:'round', lineJoin:'round'}).bindTooltip(label, {sticky:true}).addTo(roads);
+}
+const strr = [[13.247,77.241],[13.258,77.3],[13.272,77.38],[13.282,77.46],[13.29,77.545],[13.284,77.6],[13.265,77.655],[13.245,77.712],[13.205,77.75],[13.145,77.78],[13.075,77.80]];
+neon(strr, 'amber', 'STRR / NH-648 (indicative)', {w:11});
+neon([[13.0,77.585],[13.1,77.596],[13.155,77.628],[13.2,77.676],[13.247,77.712],[13.33,77.73],[13.45,77.735]], 'coral', 'NH-44 Bengaluru–Hyderabad');
+neon([[13.02,77.52],[13.07,77.45],[13.0975,77.3936],[13.17,77.31],[13.247,77.241],[13.31,77.15],[13.36,77.08]], 'aqua', 'NH-48 Nelamangala–Tumakuru');
+neon([[13.255,77.29],[13.32,77.215],[13.41,77.12],[13.52,77.0]], 'violet', 'Bengaluru–Pune Greenfield Expressway (proposed, indicative)', {slow:true});
+
+// road chips
+const roadChips = [
+  {t:'STRR', c:[13.268,77.665], col:'amber'}, {t:'NH 648', c:[13.276,77.4], col:'amber'},
+  {t:'NH-44', c:[13.06,77.592], col:'coral'}, {t:'NH-48', c:[13.14,77.34], col:'aqua'},
+  {t:'BLR–PUNE GREENFIELD EXPWY', c:[13.36,77.175], col:'violet'},
+];
+roadChips.forEach(r => L.marker(r.c, {interactive:false, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+  html:`<div class="chip road" style="background:${C[r.col]};color:#16161a!important">${r.t}</div>`})}).addTo(chipLayer));
+
+// ---------- STRR buy-band donuts (real 1.5–3.5 km) ----------
+const rings = L.layerGroup().addTo(map);
+function circlePts(c, rKm, n=90){ const pts=[]; for(let i=0;i<n;i++){const a=i/n*2*Math.PI;
+  pts.push([c[0]+(rKm/110.574)*Math.sin(a), c[1]+(rKm/(111.32*Math.cos(c[0]*Math.PI/180)))*Math.cos(a)]);} return pts; }
+[{n:'Doddaballapura interchange', c:[13.29,77.545]}, {n:'Dobbaspet interchange', c:[13.247,77.241]}, {n:'KWIN access (STRR)', c:[13.282,77.46]}]
+.forEach(ic => {
+  L.polygon([circlePts(ic.c,3.5), circlePts(ic.c,1.5)], {color:C.mint, weight:1.5, dashArray:'4 5', fillColor:C.mint, fillOpacity:.12})
+    .bindPopup(`<div class="pop"><h3>Buy-band</h3><div>${ic.n}</div>
+      <div class="row" style="margin-top:8px"><span>Ring</span><span>1.5 – 3.5 km from interchange</span></div>
+      <div class="row"><span>Why</span><span>~3-min highway access, outside NHAI setbacks, no highway-frontage price premium, less noise.</span></div></div>`)
+    .addTo(rings);
+  L.circleMarker(ic.c, {radius:6, color:'#fff', weight:2.5, fillColor:C.amber, fillOpacity:1}).bindTooltip(ic.n).addTo(rings);
+});
+
+// ---------- Sweet-spot target + callouts ----------
+const fx = L.layerGroup().addTo(map);
+L.marker([13.3,77.548], {icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+  html:`<div class="target"><i></i><i></i><i></i><i class="p"></i><i class="p p2"></i><div class="core"><div>10–20<small>LAKHS / GUNTA</small></div></div></div>`})})
+  .on('click', () => refs.dbp.openPopup()).addTo(fx);
+L.marker([13.395,77.548], {interactive:false, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+  html:`<div class="callout" style="font-size:24px">Doddaballapura<em>STRR ARC: THE SWEET SPOT (₹10–20 Lakhs/Gunta)</em></div>`})}).addTo(fx);
+
+// ---------- Anchors ----------
+const anchors = L.layerGroup().addTo(map);
+L.marker(AIRPORT, {icon:L.divIcon({className:'chip-wrap', iconSize:[0,0], html:`<div class="ipin">✈️</div>`})})
+  .bindPopup(`<div class="pop"><h3>Kempegowda Intl. Airport</h3><div>Primary demand driver for Shettigere, Devanahalli & the STRR arc.</div></div>`).addTo(anchors);
+L.marker([AIRPORT[0]-0.005, AIRPORT[1]+0.085], {interactive:false, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0],
+  html:`<div class="callout" style="font-size:14px">Kempegowda<br>International Airport</div>`})}).addTo(chipLayer);
+const dot = (c, col, n, d) => { const m = L.circleMarker(c, {radius:6, color:'#fff', weight:2, fillColor:col, fillOpacity:1})
+  .bindTooltip(n, {direction:'top'}).bindPopup(`<div class="pop"><h3>${n}</h3><div>${d}</div></div>`).addTo(anchors);
+  localIdx.push({name:n.replace(/^\S+\s(?=[A-Z])/u,''), sub:d||'On this map', ic:'●', col, go:() => { map.flyTo(c, 14, {duration:1}); map.once('moveend', () => m.openPopup()); }}); };
+dot([13.272,77.745], C.steel, '🏭 Foxconn campus (~300 ac)', 'KIADB Phase 2 / ITIR Devanahalli. Location approximate.');
+dot([13.222,77.738], C.steel, '🛩️ Boeing engineering campus (43 ac)', 'Hi-tech Defence & Aerospace Park. Location approximate.');
+dot([13.2957,77.5374], C.amber, 'Doddaballapura town', 'Entry layouts ₹1,499–1,700 / sq ft.');
+dot([13.0975,77.3936], C.aqua, 'Nelamangala town', 'RERA plots ₹3,000–5,750 / sq ft post-KWIN announcement.');
+dot([13.247,77.241], C.aqua, 'Dobbaspet', 'Raw agri land & pre-launch layouts < ₹1,800 / sq ft.');
+dot([13.2473,77.712], C.mist, 'Devanahalli', '');
+dot([13.1007,77.5963], C.mist, 'Yelahanka', 'Core-city edge; reference for Rajanukunte pricing.');
+
+// ---------- Layer control ----------
+L.control.layers(
+  {'Satellite':satellite, 'Satellite + place names':satLabels, 'Dark':dark, 'Streets':streets},
+  {'Growth zones':zoneLayer, 'Labels':chipLayer, 'Highways':roads, 'STRR buy-bands (1.5–3.5 km)':rings, 'Sweet-spot target':fx, 'Anchors & towns':anchors, 'Golden Triangle link':golden},
+  {collapsed:window.innerWidth<760, position:'topright'}).addTo(map);
+
+// initial framing: fit every zone, clear of the panel and banner
+const allB = L.featureGroup(Object.values(refs)).getBounds();
+const frameAll = (animate = false) => map.fitBounds(allB, {...(isMobile() ? mobilePad(sheetH) : {paddingTopLeft:[400,80], paddingBottomRight:[230,20]}), animate});
+
+// zoom-based label density
+const updZ = () => { const z = map.getZoom(), el = map.getContainer(); el.classList.toggle('z-low', z < 10); el.classList.toggle('z-mid', z < 11.25); };
+map.on('zoomend', updZ); updZ();
+map.on('zoomend', () => Object.values(refs).forEach(r => r.setStyle({fillOpacity:fillK()*r._base})));
+
+// click → coordinates
+let clickMk;
+map.on('click', e => {
+  if (isMobile()) {   // Google-Maps behaviour: tapping the map dismisses the place sheet
+    if (Date.now() - detailAt > 400 && panel.classList.contains('detail')) closeDetail();
+    return;
+  }
+  const km = (map.distance(e.latlng, AIRPORT)/1000).toFixed(1);
+  const dK = (map.distance(e.latlng, [13.29,77.545])/1000).toFixed(1);
+  document.getElementById('coord').innerHTML = `<b style="color:var(--label)">${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}</b><br>
+    ✈️ ${km} km to airport · ⭕ ${dK} km to Doddaballapura STRR interchange<br>
+    <a target="_blank" href="https://www.google.com/maps?q=${e.latlng.lat},${e.latlng.lng}">Open in Google Maps ↗</a>`;
+  if (clickMk) map.removeLayer(clickMk);
+  clickMk = L.circleMarker(e.latlng, {radius:7, color:'#fff', weight:2.5, fillColor:C.blue, fillOpacity:1}).addTo(map);
+});
+
+// long-press (phone) / right-click (desktop) drops a pin, like Google Maps
+map.on('contextmenu', e => dropPin([e.latlng.lat, e.latlng.lng], 'Dropped pin', `${e.latlng.lat.toFixed(5)}, ${e.latlng.lng.toFixed(5)}`, null, true));
+
+// ---------- Search (Google-Maps style) ----------
+localIdx.push({name:'Kempegowda International Airport', sub:'KIA · Devanahalli', ic:'✈', col:'#C9CDD6',
+  go:() => { map.flyTo(AIRPORT, 13, {duration:1}); }});
+const esc = t => String(t ?? '').replace(/[&<>"']/g, ch => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[ch]));
+const sEl = document.getElementById('search'), qEl = document.getElementById('q'), resEl = document.getElementById('res'),
+      clrEl = document.getElementById('clr'), locEl = document.getElementById('loc');
+let items = [], active = -1, timer, ctrl, destMk;
+
+function showList(html) { resEl.innerHTML = html; resEl.hidden = !html; sEl.classList.toggle('open', !!html); qEl.setAttribute('aria-expanded', !!html); }
+function closeList() { showList(''); items = []; active = -1; }
+
+function row(it, i) {
+  return `<li role="option" data-i="${i}"><span class="ic" style="${it.col ? `background:${it.col==='#C9CDD6'?'#8e8e93':it.col};color:#16161a` : ''}">${it.ic}</span>
+    <div><b>${esc(it.name)}</b><small>${esc(it.sub)}</small></div></li>`;
+}
+function render(local, remote, state) {
+  items = [...local, ...remote]; active = -1;
+  let h = '';
+  if (local.length) h += `<li class="hd">On this map</li>` + local.map((it, i) => row(it, i)).join('');
+  if (remote.length) h += `<li class="hd">Places</li>` + remote.map((it, i) => row(it, i + local.length)).join('');
+  if (state === 'loading') h += `<li class="msg">Searching…</li>`;
+  if (state === 'empty' && !items.length) h += `<li class="msg">No places found. Try a nearby town or village name.</li>`;
+  if (state === 'error') h += `<li class="msg">Search is unavailable right now. Check your connection and try again.</li>`;
+  showList(h);
+}
+
+const placeLabel = p => {
+  const street = [p.housenumber, p.street].filter(Boolean).join(' ');
+  const parts = [street, p.locality, p.district, p.city, p.county, p.state].filter(Boolean);
+  return [...new Set(parts)].filter(x => x !== p.name).slice(0, 3).join(', ') || (p.osm_value || '').replace(/_/g, ' ');
+};
+const ICON = {place:'📍', amenity:'🏛', shop:'🛍', tourism:'⭐', highway:'🛣', railway:'🚆', aeroway:'✈', building:'🏢', leisure:'🌳', natural:'⛰', landuse:'▦'};
+
+async function runSearch(q) {
+  q = q.trim();
+  const local = q.length < 2 ? [] : localIdx.filter(it => (it.name + ' ' + it.sub).toLowerCase().includes(q.toLowerCase())).slice(0, 4);
+  const m = q.match(/^\s*(-?\d{1,2}(?:\.\d+)?)\s*[, ]\s*(-?\d{1,3}(?:\.\d+)?)\s*$/);
+  if (m) { const ll = [+m[1], +m[2]]; return render([{name:`${ll[0]}, ${ll[1]}`, sub:'Coordinates', ic:'⌖', go:() => dropPin(ll, 'Dropped pin', `${ll[0]}, ${ll[1]}`)}], [], ''); }
+  if (q.length < 3) return local.length ? render(local, [], '') : closeList();
+  render(local, [], 'loading');
+  ctrl?.abort(); ctrl = new AbortController();
+  const c = map.getCenter();
+  try {
+    const url = `https://photon.komoot.io/api/?q=${encodeURIComponent(q)}&limit=8&lang=en&lat=${c.lat.toFixed(4)}&lon=${c.lng.toFixed(4)}&bbox=68,6,97.5,37`;
+    const r = await fetch(url, {signal:ctrl.signal}); if (!r.ok) throw new Error(r.status);
+    const data = await r.json();
+    const seen = new Set();
+    const remote = data.features.filter(f => f.properties.name).map(f => {
+      const p = f.properties, ll = [f.geometry.coordinates[1], f.geometry.coordinates[0]], sub = placeLabel(p);
+      return {name:p.name, sub, ic:ICON[p.osm_key] || '📍', ll, ext:p.extent, key:p.name + '|' + sub};
+    }).filter(it => !seen.has(it.key) && seen.add(it.key)).map(it => ({...it, go:() => dropPin(it.ll, it.name, it.sub, it.ext)}));
+    if (qEl.value.trim() === q) render(local, remote, remote.length ? '' : 'empty');
+  } catch (e) { if (e.name !== 'AbortError') render(local, [], 'error'); }
+}
+
+function pick(i) {
+  const it = items[i]; if (!it) return;
+  qEl.value = it.name; clrEl.hidden = false; closeList(); qEl.blur();
+  it.go();
+}
+
+function distInfo(ll) {
+  const km = (map.distance(ll, AIRPORT)/1000).toFixed(1), dK = (map.distance(ll, [13.29,77.545])/1000).toFixed(1);
+  return `✈️ ${km} km to airport · ⭕ ${dK} km to Doddaballapura STRR interchange (straight line)`;
+}
+function inZone(ll) {
+  const pt = L.latLng(ll);
+  const hit = zones.find(z => { const poly = z.poly; let inside = false;
+    for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+      const [yi, xi] = poly[i], [yj, xj] = poly[j];
+      if ((yi > pt.lat) !== (yj > pt.lat) && pt.lng < (xj - xi) * (pt.lat - yi) / (yj - yi) + xi) inside = !inside; }
+    return inside; });
+  return hit ? `<div class="row"><span>Zone</span><span><b>${hit.name}</b> · <span class="tag ${hit.tag[0]}" style="margin:0">${hit.tag[1]}</span></span></div>` : '';
+}
+
+function dropPin(ll, name, sub, ext, noFly) {
+  if (destMk) map.removeLayer(destMk);
+  const [lat, lng] = ll;
+  destMk = L.marker(ll, {zIndexOffset:1000, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0], popupAnchor:[0,-40],
+    html:'<div class="dpin"><div class="h"></div></div>'})}).addTo(map)
+    .bindPopup(`<div class="pop"><h3>${esc(name)}</h3>
+      <div style="color:var(--label2);font-size:13px;margin-bottom:8px">${esc(sub)}</div>
+      ${inZone(ll)}
+      <div class="row"><span>Coords</span><span>${lat.toFixed(5)}, ${lng.toFixed(5)}</span></div>
+      <div class="row"><span>Distance</span><span>${distInfo(ll)}</span></div>
+      <div class="acts"><a class="pri" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}">Directions</a>
+        <a class="sec2" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${lat},${lng}">Open in Maps</a>
+        ${navigator.share ? `<button class="sec2" data-share="${lat},${lng}" data-name="${esc(name)}">Share</button>` : ''}</div></div>`,
+      {maxWidth:320, autoPanPaddingTopLeft:isMobile()?L.point(16,130):L.point(400,80), autoPanPaddingBottomRight:L.point(isMobile()?16:60,30)});
+  if (noFly) return destMk.openPopup();
+  const pad = isMobile() ? mobilePad(sheetDetailH()) : {paddingTopLeft:[400,80], paddingBottomRight:[60,20]};
+  if (ext && ext.length === 4 && Math.abs(ext[2]-ext[0]) > .002) map.flyToBounds([[ext[1],ext[0]],[ext[3],ext[2]]], {...pad, duration:1, maxZoom:16});
+  else map.flyTo(ll, 15, {duration:1});
+  map.once('moveend', () => destMk.openPopup());
+}
+
+qEl.addEventListener('input', () => { clrEl.hidden = !qEl.value; clearTimeout(timer); timer = setTimeout(() => runSearch(qEl.value), 250); });
+qEl.addEventListener('focus', () => { if (qEl.value.trim()) runSearch(qEl.value); });
+qEl.addEventListener('keydown', e => {
+  const lis = [...resEl.querySelectorAll('li[data-i]')];
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+    if (!lis.length) return; e.preventDefault();
+    active = (active + (e.key === 'ArrowDown' ? 1 : -1) + lis.length) % lis.length;
+    lis.forEach((li, i) => li.classList.toggle('on', i === active)); lis[active].scrollIntoView({block:'nearest'});
+  } else if (e.key === 'Enter') {
+    e.preventDefault();
+    if (items.length) pick(active >= 0 ? active : 0);
+    else { clearTimeout(timer); runSearch(qEl.value).then(() => items.length && pick(0)); }
+  } else if (e.key === 'Escape') { closeList(); qEl.blur(); }
+});
+// pointerdown so the tap registers before the input blurs on mobile
+resEl.addEventListener('pointerdown', e => { const li = e.target.closest('li[data-i]'); if (li) { e.preventDefault(); pick(+li.dataset.i); } });
+clrEl.onclick = () => { qEl.value = ''; clrEl.hidden = true; closeList(); if (destMk) { map.removeLayer(destMk); destMk = null; } qEl.focus(); };
+document.addEventListener('pointerdown', e => { if (!sEl.contains(e.target)) closeList(); });
+
+// my location
+let meMk, meAcc;
+const fabLoc = document.getElementById('fabLoc');
+locEl.onclick = fabLoc.onclick = () => {
+  if (!navigator.geolocation) return alertMsg('Location is not supported on this device.');
+  locEl.classList.add('busy'); fabLoc.classList.add('busy');
+  navigator.geolocation.getCurrentPosition(pos => {
+    locEl.classList.remove('busy'); fabLoc.classList.remove('busy');
+    const ll = [pos.coords.latitude, pos.coords.longitude];
+    if (meMk) { map.removeLayer(meMk); map.removeLayer(meAcc); }
+    meAcc = L.circle(ll, {radius:pos.coords.accuracy, color:C.blue, weight:1, fillOpacity:.12, interactive:false}).addTo(map);
+    meMk = L.marker(ll, {zIndexOffset:900, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0], html:'<div class="me"></div>'})})
+      .bindPopup(`<div class="pop"><h3>You are here</h3>${inZone(ll)}<div class="row"><span>Distance</span><span>${distInfo(ll)}</span></div></div>`).addTo(map);
+    map.flyTo(ll, Math.max(map.getZoom(), 14), {duration:1});
+    map.once('moveend', () => meMk.openPopup());
+  }, err => {
+    locEl.classList.remove('busy'); fabLoc.classList.remove('busy');
+    alertMsg(err.code === 1 ? 'Location permission was denied. Allow location access for this site in your browser settings.' : 'Could not get your location. Try again outdoors or check that location is on.');
+  }, {enableHighAccuracy:true, timeout:12000, maximumAge:30000});
+};
+function alertMsg(t) { showList(`<li class="msg">${esc(t)}</li>`); setTimeout(closeList, 4000); }
+
+// ---------- Desktop: side panel toggle ----------
+const panel = document.getElementById('panel'), tg = document.getElementById('toggle');
+tg.onclick = () => { const h = panel.classList.toggle('hidden'); tg.classList.toggle('shut', h); tg.textContent = h ? '☰' : '‹'; };
+
+// ---------- Phone: Google-Maps-style bottom sheet ----------
+// Three rest heights (peek / half / full); drag the handle or header, flick to snap, tap the handle to expand.
+const root = document.documentElement, grab = panel.querySelector('.grab'), head = panel.querySelector('header'),
+      dbody = document.getElementById('dbody');
+const probe = Object.assign(document.createElement('div'), {style:'position:fixed;bottom:0;height:env(safe-area-inset-bottom);visibility:hidden;pointer-events:none'});
+document.body.appendChild(probe);
+const safeB = () => probe.offsetHeight;
+const topUI = () => document.getElementById('chips').getBoundingClientRect().bottom;
+let sheetH = 0, detailAt = 0;
+
+const snaps = () => {
+  const full = panel.offsetHeight;
+  const peek = panel.classList.contains('detail')
+    ? grab.offsetHeight + Math.min(dbody.scrollHeight, 92) + safeB()
+    : grab.offsetHeight + head.offsetHeight + safeB();
+  return {peek, half:Math.min(full, Math.round(innerHeight * .46)), full};
+};
+function setSheet(h, animate = true) {
+  const full = panel.offsetHeight;
+  sheetH = Math.max(0, Math.min(full, Math.round(h)));
+  panel.style.transition = animate ? '' : 'none';
+  panel.style.transform = `translateY(${full - sheetH}px)`;
+  root.style.setProperty('--sheet-h', sheetH + 'px');
+}
+const snapTo = name => setSheet(snaps()[name]);
+// visible map area = between the chips and the top of the sheet
+const mobilePad = sheetPx => ({paddingTopLeft:[24, topUI() + 16], paddingBottomRight:[24, sheetPx + 24]});
+const sheetDetailH = () => Math.round(innerHeight * .46);
+
+let drag = null;
+panel.addEventListener('pointerdown', e => {
+  if (!isMobile() || !e.target.closest('[data-drag]') || e.target.closest('a,button')) return;
+  drag = {y:e.clientY, h:sheetH, t:performance.now(), lastY:e.clientY, lastT:performance.now(), moved:false};
+  panel.setPointerCapture(e.pointerId);
+});
+panel.addEventListener('pointermove', e => {
+  if (!drag) return;
+  const dy = drag.y - e.clientY;
+  if (Math.abs(dy) > 5) drag.moved = true;
+  drag.v = (drag.lastY - e.clientY) / Math.max(1, performance.now() - drag.lastT);   // px/ms, + = upward
+  drag.lastY = e.clientY; drag.lastT = performance.now();
+  const s = snaps();
+  setSheet(Math.max(s.peek * .6, Math.min(s.full, drag.h + dy)), false);
+});
+const endDrag = () => {
+  if (!drag) return;
+  const s = snaps(), order = [s.peek, s.half, s.full];
+  let target;
+  if (!drag.moved) target = sheetH < s.half - 4 ? s.half : (sheetH < s.full - 4 ? s.full : s.peek);   // tap = expand
+  else if (Math.abs(drag.v || 0) > .45) target = drag.v > 0 ? order.find(h => h > sheetH + 4) ?? s.full : [...order].reverse().find(h => h < sheetH - 4) ?? s.peek;
+  else target = order.reduce((a, b) => Math.abs(b - sheetH) < Math.abs(a - sheetH) ? b : a);
+  drag = null; setSheet(target);
+};
+panel.addEventListener('pointerup', endDrag);
+panel.addEventListener('pointercancel', endDrag);
+// keep a content scroll from tugging the page while the sheet is part-open
+['#dbody', '.body'].forEach(sel => panel.querySelector(sel).addEventListener('scroll', function () {
+  if (isMobile() && this.scrollTop > 8 && sheetH < snaps().full - 4) snapTo('full');
+}, {passive:true}));
+
+// Place details live in the sheet on phones (popups on desktop)
+function showDetail(html, ll) {
+  detailAt = Date.now();
+  dbody.innerHTML = html; dbody.scrollTop = 0;
+  dbody.querySelector('h3')?.setAttribute('data-drag', '');
+  panel.classList.add('detail');
+  const s = snaps(), h = Math.min(grab.offsetHeight + dbody.scrollHeight + 4, s.half);
+  setSheet(Math.max(h, s.peek));
+  if (ll) {   // centre the place in the map area that is still visible
+    const pt = map.latLngToContainerPoint(ll), cy = (topUI() + innerHeight - sheetH) / 2;
+    map.panBy([pt.x - innerWidth / 2, pt.y - cy], {duration:.5});
+  }
+}
+function closeDetail() {
+  panel.classList.remove('detail'); dbody.innerHTML = '';
+  document.querySelectorAll('.zone').forEach(x => x.classList.remove('active'));
+  if (isMobile()) snapTo('peek');
+}
+document.getElementById('dclose').onclick = closeDetail;
+map.on('popupopen', e => {
+  if (!isMobile()) return;
+  const html = e.popup.getContent(), ll = e.popup.getLatLng();
+  map.closePopup(e.popup);
+  showDetail(typeof html === 'string' ? html : html.outerHTML, ll);
+});
+
+// Share a place (phones with the native share sheet)
+document.addEventListener('click', e => {
+  const b = e.target.closest('[data-share]'); if (!b) return;
+  const [lat, lng] = b.dataset.share.split(',');
+  navigator.share({title:b.dataset.name, text:b.dataset.name, url:`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}).catch(() => {});
+});
+
+// ---------- Quick chips ----------
+const chipLayers = {rings, roads, zones:zoneLayer};
+const syncChips = () => document.querySelectorAll('#chips [data-act]').forEach(b => {
+  const L_ = chipLayers[b.dataset.act]; if (L_) b.classList.toggle('off', !map.hasLayer(L_));
+});
+document.getElementById('chips').addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b) return;
+  const act = b.dataset.act, lay = chipLayers[act];
+  if (lay) { map.hasLayer(lay) ? map.removeLayer(lay) : map.addLayer(lay); syncChips(); }
+  else if (act === 'sweet') zoneEls.dbp.click();
+  else if (act === 'airport') { map.flyTo(AIRPORT, 12.5, {duration:1}); map.once('moveend', () => anchors.eachLayer(l => l.getLatLng && l.getLatLng().equals(AIRPORT) && l.openPopup())); }
+});
+map.on('overlayadd overlayremove', syncChips);
+
+// ---------- Start-up ----------
+function layout() {
+  if (isMobile()) {
+    panel.classList.remove('hidden'); tg.classList.remove('shut');
+    setSheet(panel.classList.contains('detail') ? Math.max(sheetH, snaps().peek) : snaps().peek, false);
+  } else {
+    panel.style.transform = ''; panel.style.transition = ''; root.style.removeProperty('--sheet-h');
+    if (panel.classList.contains('detail')) closeDetail();
+  }
+}
+layout();
+map.invalidateSize();
+frameAll();
+let wasMobile = isMobile();
+addEventListener('resize', () => {
+  layout(); map.invalidateSize();
+  if (wasMobile !== isMobile()) { wasMobile = isMobile(); frameAll(); }
+});
+syncChips();
+
+</script>
+</body>
+</html>
