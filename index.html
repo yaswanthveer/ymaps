@@ -73,6 +73,7 @@ body{position:fixed;inset:0}
 .dpin .h{position:absolute;left:0;top:0;width:34px;height:34px;border-radius:50%;background:var(--red);border:2.5px solid #fff;box-shadow:0 3px 10px rgba(0,0,0,.35);display:grid;place-items:center}
 .dpin .h::after{content:"";width:10px;height:10px;border-radius:50%;background:#fff}
 .dpin::after{content:"";position:absolute;left:50%;top:33px;width:3px;height:12px;margin-left:-1.5px;background:#fff;border-radius:2px;box-shadow:0 1px 3px rgba(0,0,0,.4)}
+.dpin.site .h{background:#FF5C8A}
 .me{width:20px;height:20px;transform:translate(-50%,-50%);border-radius:50%;background:var(--blue);border:3px solid #fff;box-shadow:0 0 0 7px rgba(0,122,255,.22),0 2px 6px rgba(0,0,0,.3)}
 .acts{display:flex;gap:8px;margin-top:12px;flex-wrap:wrap}
 .acts a,.acts button{flex:1;border:0;cursor:pointer;font-family:var(--font);text-align:center;text-decoration:none;font-weight:600;font-size:15px;padding:10px 12px;border-radius:12px;white-space:nowrap}
@@ -496,6 +497,25 @@ dot([13.247,77.241], C.aqua, 'Dobbaspet', 'Raw agri land & pre-launch layouts < 
 dot([13.2473,77.712], C.mist, 'Devanahalli', '');
 dot([13.1007,77.5963], C.mist, 'Yelahanka', 'Core-city edge; reference for Rajanukunte pricing.');
 
+// ---------- Marked site (own colour: rose — used nowhere else on the map) ----------
+const SITE = [13.4562525, 77.5150758], ROSE = '#FF5C8A';
+const siteMk = L.marker(SITE, {zIndexOffset:800, icon:L.divIcon({className:'chip-wrap', iconSize:[0,0], popupAnchor:[0,-40],
+  html:`<div class="dpin site"><div class="h"></div></div>`})})
+  .bindPopup(`<div class="pop"><h3>Marked site</h3>
+    <div style="color:var(--label2);font-size:13px;margin-bottom:8px">North of Doddaballapura</div>
+    ${inZone(SITE)}
+    <div class="row"><span>Coords</span><span>${SITE[0]}, ${SITE[1]}</span></div>
+    <div class="row"><span>Distance</span><span>${distInfo(SITE)}</span></div>
+    <div class="acts"><a class="pri" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=${SITE[0]},${SITE[1]}">Directions</a>
+      <a class="sec2" target="_blank" rel="noopener" href="https://www.google.com/maps/search/?api=1&query=${SITE[0]},${SITE[1]}">Open in Maps</a></div></div>`,
+    {maxWidth:320, autoPanPaddingTopLeft:L.point(400,80), autoPanPaddingBottomRight:L.point(60,30)})
+  .addTo(anchors);
+L.marker(SITE, {interactive:true, icon:L.divIcon({className:'chip-wrap site-label', iconSize:[0,0],
+  html:`<div class="chip" style="color:${ROSE};transform:translate(-50%,10px)"><div class="tx"><span>Marked site</span></div></div>`})})
+  .on('click', () => siteMk.openPopup()).addTo(anchors);
+localIdx.push({name:'Marked site', sub:`${SITE[0]}, ${SITE[1]}`, ic:'●', col:ROSE,
+  go:() => { map.flyTo(SITE, 14, {duration:1}); map.once('moveend', () => siteMk.openPopup()); }});
+
 // ---------- Layer control ----------
 L.control.layers(
   {'Satellite':satellite, 'Satellite + place names':satLabels, 'Dark':dark, 'Streets':streets},
@@ -503,7 +523,7 @@ L.control.layers(
   {collapsed:window.innerWidth<760, position:'topright'}).addTo(map);
 
 // initial framing: fit every zone, clear of the panel and banner
-const allB = L.featureGroup(Object.values(refs)).getBounds();
+const allB = L.featureGroup(Object.values(refs)).getBounds().extend(SITE);
 const frameAll = (animate = false) => map.fitBounds(allB, {...(isMobile() ? mobilePad(sheetH) : {paddingTopLeft:[400,80], paddingBottomRight:[230,20]}), animate});
 
 // zoom-based label density
